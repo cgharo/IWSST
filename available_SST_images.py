@@ -20,7 +20,7 @@ graphdir = '/home/cercache/users/cgonzale/snapshots/'#root path for snapshots of
 
 
 #Parameters that will change to define region and period of interest
-Region = 'Mozamb2'
+Region = 'Mozamb4'
 
 region_folder = datadir + os.sep + Region + os.sep
 
@@ -34,9 +34,18 @@ fsensor = [f.rsplit(os.sep,4)[1] for f in file_list]
 sensor = list(set(fsensor))
 
 # Read date from filenames and convert the string into datetime
-date = [f.rsplit(os.sep,1)[1][0:14] for f in file_list]
+date = [f.rsplit(os.sep,1)[1][0:14] for f in file_list if 'modis' not in f]
+#Take into account different file name for modis
+date_modis = [f.rsplit(os.sep,1)[1][0:8] for f in file_list if 'modis'  in f ]
+#add 000000 to account for HHMMSS
+date_modis_h = [d+'000000' for d in date_modis]
+#concatenate both lists
+date_merge = date + date_modis_h
+
+
+
 format='%Y%m%d%H%M%S'
-date_time = pd.to_datetime(date, format=format)
+date_time = pd.to_datetime(date_merge, format=format)
 
 
 
@@ -82,7 +91,7 @@ months = mdates.MonthLocator()  # every month
 days = mdates.DayLocator()  # every day
 yearsFmt = mdates.DateFormatter('%Y')
 
-symb_sensor = ['o','^']
+symb_sensor = ['o','^','*']
 
 
 locale.setlocale(locale.LC_ALL,'en_US.utf8')
