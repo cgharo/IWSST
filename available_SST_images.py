@@ -20,7 +20,7 @@ graphdir = '/home/cercache/users/cgonzale/snapshots/'#root path for snapshots of
 
 
 #Parameters that will change to define region and period of interest
-Region = 'Mozamb4'
+Region = 'AustraliaHW'
 
 region_folder = datadir + os.sep + Region + os.sep
 
@@ -35,13 +35,15 @@ sensor = list(set(fsensor))
 
 # Read date from filenames and convert the string into datetime
 date = [f.rsplit(os.sep,1)[1][0:14] for f in file_list if 'modis' not in f]
+file_list_rest = [f for f in file_list if 'modis' not in f ]
 #Take into account different file name for modis
 date_modis = [f.rsplit(os.sep,1)[1][0:8] for f in file_list if 'modis'  in f ]
+file_list_modis = [f for f in file_list if 'modis'  in f ]
 #add 000000 to account for HHMMSS
 date_modis_h = [d+'000000' for d in date_modis]
 #concatenate both lists
 date_merge = date + date_modis_h
-
+file_list_merge = file_list_rest + file_list_modis
 
 
 format='%Y%m%d%H%M%S'
@@ -52,13 +54,13 @@ date_time = pd.to_datetime(date_merge, format=format)
 
 #Find dates with more than one SST image
 
-data_dict = {'date' : date_time, 'sensor':fsensor,'path':file_list}
+data_dict = {'date' : date_time, 'sensor':fsensor,'path':file_list_merge}
 df = pd.DataFrame(data_dict)
 
 df = df.sort_values('date')
 
 #Append new column for day_index
-df['day_index'] = df['date'].apply(lambda x:str(x.year)+str(x.month)+str(x.day))
+df['day_index'] = df['date'].apply(lambda x:x.strftime('%Y%m%d'))
 df = df[df.day_index.duplicated(keep=False)]
 a = df.groupby('day_index').apply(lambda x: list(x.path))
 list_day_images = a.values
@@ -109,7 +111,7 @@ ax.set_ylim(0, len(sensor))
 
 ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
 ax.xaxis.set_major_locator(months)
-ax.xaxis.set_minor_locator(days)
+#ax.xaxis.set_minor_locator(days)
 ax.xaxis.set_ticks_position('bottom')
 
 
