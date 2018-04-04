@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 #from cmocean import cm
 import time
+import threading
 from utide._ut_constants import ut_constants as utide
 
 g=9.81
@@ -29,6 +30,8 @@ def get_hret_ssh(constituents=['M2','N2','S2','K1','O1','P1'], lonb=None, latb=N
         Bounds for latitude, e.g.: latb=(-10.,10.)
     hret: str
         Path to HRET netcdf file
+    bathy: str
+        Path to Bathymetry netcdffile
     '''
     hret = xr.open_dataset(hret, chunks={'longitude': 500, 'latitude': 500})
     hret_constituents = ['M2','N2','S2','K1','O1','P1']
@@ -223,4 +226,100 @@ def safe_make_folder(i):
         print('creating: ', i)
     except:
         pass    
+
+def plot_sst(sst, colorbar=False, title=None, vmin=None, vmax=None, savefig=None, offline=False, coast_resolution='110m', figsize=(10,10)):
+    if vmin is None:
+        vmin = sst.min()
+    if vmax is None:
+        vmax = sst.max()    
+    MPL_LOCK = threading.Lock()
+    with MPL_LOCK:
+        if offline:
+            plt.switch_backend('agg')
+        #
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111, projection=ccrs.PlateCarree())
+        try:
+            im = sst.plot.pcolormesh(ax=ax, transform=ccrs.PlateCarree(), vmin=vmin, vmax=vmax,x='lon', y='lat', add_colorbar=colorbar, cmap=cm.thermal)
+            fig.colorbar(im)
+            gl=ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True, linewidth=2, color='k', 
+                    alpha=0.5, linestyle='--')
+            gl.xlabels_top = False
+            ax.coastlines(resolution=coast_resolution, color='k')
+        except:
+            pass
+        #
+        if title is None:
+            ax.set_title('HW sst')
+        else:
+            ax.set_title(title)
+        #
+        if savefig is not None:
+            fig.savefig(savefig, dpi=150)
+            plt.close(fig)
+        #
+        if not offline:
+           plt.show()
+
+def get_fes_uv(constituents=['m2','n2','s2','k1','o1','p1'], lonb=None, latb=None, 
+            fes='/home2/pharos/othr/aponte/tides/FES2014/', bathy=  './ETOPO2v2c_f4.nc'):
+    ''' Load FES currents
+    
+    Parameters
+    ----------
+    consituents: list of str
+        Consistuents considered
+    lonb: None, list, tuple
+        Bounds for longitude, e.g.: lonb=(10.,100.)
+    latb: None, list, tuple
+        Bounds for latitude, e.g.: latb=(-10.,10.)
+    fes: str
+        Path to FES netcdf file
+    '''
+
+    uvdir = fes+'fes2014a_currents/'
+    U = xr.Dataset()
+    V = xr.Dataset()
+    #fes_constituents = ['M2','N2','S2','K1','O1','P1']
+    for c in constituents:
+        fname_u = uvdir+'eastward_velocity/'+c+'.nc'
+        fes_u = xr.open_dataset(fname_u, chunks={'lon': 500, 'lat': 500})
+        U[c] = fes_u['Ua']
+        U['longitude'] = fes_u['lon']
+        U['latitude'] = fes_u['lat']
+
+        fname_v = uvdir+'northward_velocity/'+c+'.nc'
+        fes_v = xr.open_dataset(fname_v, chunks={'lon': 500, 'lat': 500})
+        V[c] = fes_v['Va']
+        V['longitude'] = fes_v['lon']
+        V['latitude'] = fes_v['lat']
+   
+    #
+    omega_K1 = 15.04107*np.pi/180./3600. # deg/h -> rad/s
+    print(omega_K1)
+    f = 2*omega_K1*cpd*np.sin(np.pi/180.*U['latitude'])
+    #
+
+    if lonb is not None:
+        # should handle 360 wrapping
+        U = U.where(U['longitude']>=lonb[0], drop=True)
+        U = U.where(U['longitude']<=lonb[1], drop=True)
+        V = V.where(V['longitude']>=lonb[0], drop=True)
+        V = V.where(V['longitude']<=lonb[1], drop=True)
+    if latb is not None:
+        # should check conventions for longitude
+        U = U.where(U['latitude']>=latb[0], drop=True)
+        U = U.where(U['latitude']<=latb[1], drop=True)
+        V = V.where(V['latitude']>=latb[0], drop=True)
+        V = V.where(V['latitude']<=latb[1], drop=True)
+    if type(bathy) is str:
+        h = load_bathy(lon=U.longitude, lat=U.latitude , bathy=bathy)
+        U = U.assign(h=h)
+        V = V.assign(h=h)
+    omega = dict()
+    for cst,o in zip(utide['const']['name'], utide['const']['freq']):
+        if cst in constituents:
+            omega[cst] = o*24. # cpd, input frequencies are cph
+            print(cst+' omega=%e rad/s, %.3f cpd'%(o*2.*np.pi/3600., o*24.))
+    return U, V, constituents, omega
         
