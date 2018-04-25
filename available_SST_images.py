@@ -21,6 +21,7 @@ graphdir = '/home/cercache/users/cgonzale/snapshots/'#root path for snapshots of
 
 #Parameters that will change to define region and period of interest
 Region = 'AustraliaHW'
+verbose = False
 
 region_folder = datadir + os.sep + Region + os.sep
 
@@ -59,24 +60,39 @@ df = pd.DataFrame(data_dict)
 
 df = df.sort_values('date')
 
-#Append new column for day_index
+#Append new column for day_index,index_hour and year
 df['day_index'] = df['date'].apply(lambda x:x.strftime('%Y%m%d'))
+df['index_hour'] = df['date'].apply(lambda x:x.hour)
+df['year'] = df['date'].apply(lambda x:x.year)
+
+#Print available L2 granule per sensor and year
+table = df.groupby(['sensor', 'year']).size()
+print(table)
+
 df = df[df.day_index.duplicated(keep=False)]
 a = df.groupby('day_index').apply(lambda x: list(x.path))
 list_day_images = a.values
 
+
+#number of days with more than one granule at different passes
+count_series2 = df.groupby(['day_index']).size()
+
+
+print('Number of days with more than one L2 granule:', len(count_series2))
 
 #print results per date and path to data file
 data_file_fname = pd.DataFrame([])
 
 for days in range(len(list_day_images)):
     date = [list_day_images[days][0].rsplit(os.sep,1)[1][0:8]]
-    print('###############')
-    print(date)
-    print('    files:')
+    if(verbose):
+        print('###############')
+        print(date)
+        print('    files:')
     for f in list_day_images[days]:
         data_file_fname = data_file_fname.append(pd.DataFrame({'date': date,'path':f}, index=[0]))
-        print(f)
+        if(verbose):
+           print(f)
 
 
 #save csv file
