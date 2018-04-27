@@ -12,6 +12,9 @@ from glob import iglob
 import sys
 import argparse
 from utils import *
+from palette import *
+palette = '/home3/homedir7/perso/cgonzale/IWAVE/script/palette/medspiration.rgb'
+csst = getColorMap( rgbFile = palette )
 
 ######################
 def date_to_nth_day(date, format='%Y%m%d'):
@@ -46,6 +49,8 @@ def plot_snapshots_SST(Region , datadir = '/home/cercache/users/cgonzale/data/te
         safe_make_folder(graphdir + os.sep+ path_graph)
     
         #may check if the figure already exists before open file and do the plot
+        #ds = xr.open_dataset(file)
+        #print(file)
         ncfile=Dataset(file,'r')
         lat = ncfile.variables['lat'][:]
         lon = ncfile.variables['lon'][:]
@@ -55,11 +60,12 @@ def plot_snapshots_SST(Region , datadir = '/home/cercache/users/cgonzale/data/te
         sst = np.squeeze(sst)
         lon2d , lat2d = np.meshgrid(lon,lat)
 
-        fig1=plt.figure(figsize=(12, 5))
+        fig1=plt.figure(figsize=(9, 5))
         ax = plt.axes(projection=ccrs.PlateCarree())
-        toplt = sst
-        hdl = ax.pcolormesh(lon2d,lat2d,toplt, \
-	                transform = ccrs.PlateCarree(),cmap=cm.thermal)
+        #toplt = ds['sea_surface_temperature']
+        #hdl = ax.imshow(toplt, origin='lower', transform=ccrs.PlateCarree(), cmap =csst)
+        hdl = ax.pcolormesh(lon2d,lat2d,sst, \
+	                transform = ccrs.PlateCarree(),cmap=csst)
         ax.coastlines(resolution='110m', color ='k' )
         ax.add_feature(cfeature.LAND, facecolor = '0.75')
         ax.gridlines(draw_labels = True)
