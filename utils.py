@@ -261,7 +261,7 @@ def plot_sst(sst, colorbar=False, title=None, vmin=None, vmax=None, savefig=None
         if not offline:
            plt.show()
 
-def get_fes_uv(constituents=['m2','n2','s2','k1','o1','p1'], lonb=None, latb=None, 
+def get_fes_uv(constituents=['M2','N2','S2','K1','O1','P1'], lonb=None, latb=None, 
             fes='/home2/pharos/othr/aponte/tides/FES2014/', bathy=  './ETOPO2v2c_f4.nc'):
     ''' Load FES currents
     
@@ -280,17 +280,20 @@ def get_fes_uv(constituents=['m2','n2','s2','k1','o1','p1'], lonb=None, latb=Non
     uvdir = fes+'fes2014a_currents/'
     U = xr.Dataset()
     V = xr.Dataset()
+    constituents_temp = [c.swapcase() for c in constituents]
     #fes_constituents = ['M2','N2','S2','K1','O1','P1']
-    for c in constituents:
+    for c in constituents_temp:
         fname_u = uvdir+'eastward_velocity/'+c+'.nc'
         fes_u = xr.open_dataset(fname_u, chunks={'lon': 500, 'lat': 500})
-        U[c] = fes_u['Ua']
+        U[c.swapcase()+'Ua'] = fes_u['Ua']
+        U[c.swapcase()+'Ug'] = fes_u['Ug']
         U['longitude'] = fes_u['lon']
         U['latitude'] = fes_u['lat']
 
         fname_v = uvdir+'northward_velocity/'+c+'.nc'
         fes_v = xr.open_dataset(fname_v, chunks={'lon': 500, 'lat': 500})
-        V[c] = fes_v['Va']
+        V[c.swapcase()+'Va'] = fes_v['Va']
+        V[c.swapcase()+'Vg'] = fes_v['Vg']
         V['longitude'] = fes_v['lon']
         V['latitude'] = fes_v['lat']
    
@@ -322,4 +325,78 @@ def get_fes_uv(constituents=['m2','n2','s2','k1','o1','p1'], lonb=None, latb=Non
             omega[cst] = o*24. # cpd, input frequencies are cph
             print(cst+' omega=%e rad/s, %.3f cpd'%(o*2.*np.pi/3600., o*24.))
     return U, V, constituents, omega
-        
+
+def make_cartopy(nrow,ncol,projection=ccrs.PlateCarree(), fig=plt.figure(), resolution='100m',nfig=1,title=None,lonticks = None):
+    from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+    import cartopy.feature as cfeature
+    import matplotlib.ticker as mticker
+    ax = fig.add_subplot(nrow,ncol,nfig,projection=projection)
+    ax.coastlines(resolution=resolution, color='k')
+    ax.add_feature(cfeature.LAND, facecolor = '0.75')
+    
+    #ax.gridlines(draw_labels = True)
+    if type(title) is str:
+        ax.set_title(title)
+    gl = ax.gridlines(crs=projection, draw_labels=True,
+                  linewidth=2, color='gray', alpha=0.5, linestyle='--')
+    gl.xlabels_top = False
+
+    gl.xformatter = LONGITUDE_FORMATTER
+    gl.yformatter = LATITUDE_FORMATTER
+    if lonticks is not None:
+        gl.xlabels_bottom = False
+        ax.set_xticks(lonticks, crs=ccrs.PlateCarree())
+    # Only PlateCarree and Mercator plots are currently supported.
+    return ax
+
+def get_slow_fast (v, omega = 2.*np.pi/86400.*1.923, omega2 = None):
+    """ Extract the tidal signal with a harmonic analysis 
+    The fit looks like: v = v0 + v1 x t + sum( vi_c cos(omega x t) + vi_s sin(omega x t))
+    or:  v = v0 + v1 x t + sum( vi_c cos(omega x t) + vi_s sin(omega x t)) + sum( vi_c cos(omega2 x t) + vi_s sin(omega2 x t))
+        Parameters
+    ----------
+        v:
+            signal to decompose
+        t:
+            time line in seconds
+        omega:
+            tidal frequency in rad/s (M2 = 1.39844e-4)
+        omega2:
+            diurnal frequency in rad/s (M2/2 = 0,69922e-4)
+    """
+    t = v.time
+    Nt = t.shape
+    if (omega2 is not None):
+        Xx = [t*0.+1., t , np.cos(omega*t), np.sin(omega*t), np.cos(omega2*t), np.sin(omega2*t)]
+        X = np.vstack((np.ones_like(t),t,np.cos(omega*t),np.sin(omega*t),np.cos(omega2*t),np.sin(omega2*t)))
+    else:
+        X = np.vstack((np.ones_like(t),t,np.cos(omega*t),np.sin(omega*t)))
+        Xx = [t*0.+1., t , np.cos(omega*t), np.sin(omega*t)]
+    
+    X=X.transpose()
+    Mx=np.linalg.inv(X.transpose().dot(X))
+    
+   
+    
+    XtY = [(x*v*Nt).mean(dim='time') for x in Xx]
+
+    B = []
+    for i in range(len(Xx)):
+        B.append(XtY[0]*0.)
+        for j in range(len(Xx)):
+            B[-1] += Mx[i,j]*XtY[j]
+    
+    vslow = B[0]*Xx[0] + B[1]*Xx[1]
+    vfast = B[2]*Xx[2] + B[3]*Xx[3]
+    
+    return vslow, vfast
+
+def skill(vtrue,v):
+    """ compute the skill of a reconstruction (v) of the vtrue signal
+    """
+   
+    dif_vtrue_v = vtrue - v
+    skill = 1. - dif_vtrue_v.std('time')/vtrue.std('time')
+    
+    
+    return skill

@@ -20,7 +20,7 @@ graphdir = '/home/cercache/users/cgonzale/snapshots/'#root path for snapshots of
 
 
 #Parameters that will change to define region and period of interest
-Region = 'AustraliaHW'
+Region = 'Equator'
 verbose = False
 
 region_folder = datadir + os.sep + Region + os.sep
